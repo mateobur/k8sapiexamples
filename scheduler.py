@@ -8,18 +8,18 @@ from sdcclient import SdcClient
 
 config.load_kube_config()
 v1 = client.CoreV1Api()
-metric_id = "net.http.request.time"
-sdclient = SdcClient("c30a0cfd-609a-41a6-b822-e8e0d4bdeb0d")
+metric_id = "net.http.request.time" # Name of the metric as shown in Sysdig Monitor
+sdclient = SdcClient("c30a0cfd-609a-41a6-b822-e8e0d4bdeb0d") # Sysdig Monitor API Token
 metrics = [{"id": metric_id, "aggregations":
-           {"time": "timeAvg", "group": "avg"}}]
-node_blacklist = ["kubemaster"]
+           {"time": "timeAvg", "group": "avg"}}] # Time and group aggregations
+node_blacklist = ["kubemaster"] # Nodes excluded from the scheduler 
 
-scheduler_name = "sysdigsched"
+scheduler_name = "sysdigsched" # This is the string that you will need on the pod specs
 
 
 def get_request_time(hostname):
     hostfilter = "host.hostName = '%s'" % hostname
-    metricdata = sdclient.get_data(metrics, -60, 0, 60, hostfilter)
+    metricdata = sdclient.get_data(metrics, -60, 0, 60, hostfilter) # The last 60 second, one sample over 60 seconds
     request_time = float(metricdata[1].get("data")[0].get("d")[0])
     print hostname + " (" + metric_id + "): " + str(request_time)
     return request_time
@@ -40,12 +40,13 @@ def nodes_available():
             if n.metadata.name in node_blacklist:
                 continue
             for status in n.status.conditions:
-                if status.status == "True" and status.type == "Ready":
+                if status.status == "True" and status.type == "Ready": # All Ready not blacklisted nodes
                     ready_nodes.append(n.metadata.name)
     print "Nodes available: " + str(ready_nodes)
     return ready_nodes
 
 
+# Binding the pod with the target node
 def scheduler(name, node, namespace="default"):
     body = client.V1Binding()
     target = client.V1ObjectReference()
@@ -65,10 +66,12 @@ def scheduler(name, node, namespace="default"):
 def main():
     w = watch.Watch()
     for event in w.stream(v1.list_namespaced_pod, "default"):
+        # New pending pod that requires our custom scheduler
         if event["object"].status.phase == "Pending" and \
            event["object"].spec.scheduler_name == scheduler_name and not \
            event["object"].spec.node_name:
             try:
+                # Choose the best target node using Sysdig metrics
                 res = scheduler(event["object"].metadata.name,
                                 best_request_time(nodes_available()))
             except client.rest.ApiException as e:
