@@ -8,18 +8,24 @@ from sdcclient import SdcClient
 
 config.load_kube_config()
 v1 = client.CoreV1Api()
-metric_id = "net.http.request.time" # Name of the metric as shown in Sysdig Monitor
-sdclient = SdcClient("c30a0cfd-609a-41a6-b822-e8e0d4bdeb0d") # Sysdig Monitor API Token
+# Metric name as shown in Sysdig Monitor
+metric_id = "net.http.request.time"
+# Sysdig Monitor API Token
+sdclient = SdcClient("c30a0cfd-609a-41a6-b822-e8e0d4bdeb0d")
+# Time and group aggregations
 metrics = [{"id": metric_id, "aggregations":
-           {"time": "timeAvg", "group": "avg"}}] # Time and group aggregations
-node_blacklist = ["kubemaster"] # Nodes excluded from the scheduler 
+           {"time": "timeAvg", "group": "avg"}}]
+# Nodes excluded from the scheduler
+node_blacklist = ["kubemaster"]
 
-scheduler_name = "sysdigsched" # This is the string that you will need on the pod specs
+# This is the string that you will need on the pod specs
+scheduler_name = "sysdigsched"
 
 
 def get_request_time(hostname):
     hostfilter = "host.hostName = '%s'" % hostname
-    metricdata = sdclient.get_data(metrics, -60, 0, 60, hostfilter) # The last 60 second, one sample over 60 seconds
+    # Sample over the last 60 seconds, just one sample for this period
+    metricdata = sdclient.get_data(metrics, -60, 0, 60, hostfilter)
     request_time = float(metricdata[1].get("data")[0].get("d")[0])
     print hostname + " (" + metric_id + "): " + str(request_time)
     return request_time
@@ -40,7 +46,8 @@ def nodes_available():
             if n.metadata.name in node_blacklist:
                 continue
             for status in n.status.conditions:
-                if status.status == "True" and status.type == "Ready": # All Ready not blacklisted nodes
+                # All Ready & not blacklisted nodes
+                if status.status == "True" and status.type == "Ready":
                     ready_nodes.append(n.metadata.name)
     print "Nodes available: " + str(ready_nodes)
     return ready_nodes
